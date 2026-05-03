@@ -1,0 +1,1702 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🐹 기니 밥주기 게임</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#8ad488;font-family:'Segoe UI',Arial,sans-serif;user-select:none}
+canvas{display:block}
+#ui{position:fixed;inset:0;pointer-events:none}
+
+/* 점수 박스 (배부른 + 배고픈 같이) */
+#score-box{
+  position:absolute;top:18px;right:18px;
+  display:flex;flex-direction:column;gap:6px;
+  align-items:flex-end;
+}
+.score-pill{
+  background:#5bc8e8;border-radius:30px;
+  padding:9px 22px;font-size:18px;font-weight:bold;
+  color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.28);
+}
+.score-pill.hungry{
+  background:#ff7755;
+}
+.score-pill.hungry.warn{
+  animation:pulseRed 1s ease-in-out infinite;
+}
+@keyframes pulseRed{
+  0%,100%{background:#ff7755;transform:scale(1)}
+  50%{background:#ff3322;transform:scale(1.05)}
+}
+
+/* 게임 오버 화면 */
+#gameover{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.75);
+  display:none;align-items:center;justify-content:center;
+  flex-direction:column;z-index:1000;
+  pointer-events:all;
+}
+#gameover.show{display:flex;animation:goFade .5s ease-out}
+@keyframes goFade{
+  from{opacity:0}to{opacity:1}
+}
+#gameover .go-icon{font-size:120px;animation:goShake .8s ease-in-out infinite}
+@keyframes goShake{
+  0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}
+}
+#gameover h1{
+  color:#fff;font-size:50px;margin:20px 0 10px;
+  text-shadow:3px 3px 8px rgba(0,0,0,.5);
+}
+#gameover p{
+  color:#fff;font-size:22px;margin:8px 0;
+  text-shadow:2px 2px 5px rgba(0,0,0,.4);
+}
+#gameover .stats{
+  background:rgba(255,255,255,.15);
+  border-radius:18px;padding:18px 32px;
+  margin:24px 0;font-size:18px;
+  border:2px solid rgba(255,255,255,.3);
+  color:#fff;line-height:1.8;
+}
+#restart-btn{
+  margin-top:22px;
+  padding:16px 50px;font-size:22px;font-weight:bold;
+  border:none;border-radius:30px;
+  background:linear-gradient(135deg,#7bc67a,#5aaa59);
+  color:#fff;cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.3);
+  transition:all .2s;
+}
+#restart-btn:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 8px 22px rgba(0,0,0,.4)}
+#restart-btn:active{transform:translateY(0) scale(1)}
+
+/* 인벤토리 (×N 컴팩트) */
+#inventory{
+  position:absolute;bottom:18px;left:50%;
+  transform:translateX(-50%);
+  display:flex;gap:10px;align-items:flex-end;
+  pointer-events:all;
+}
+.inv-slot{
+  min-width:80px;height:80px;
+  background:rgba(255,255,255,.95);
+  border-radius:20px;border:3px solid rgba(255,255,255,.5);
+  cursor:pointer;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  font-size:30px;transition:all .18s;
+  box-shadow:0 4px 14px rgba(0,0,0,.18);padding:0 8px;
+}
+.inv-slot:hover{transform:translateY(-5px) scale(1.07)}
+.inv-slot.selected{
+  border-color:#ff9900;background:#fff3cc;
+  box-shadow:0 0 0 3px #ff9900,0 5px 18px rgba(0,0,0,.25);
+  transform:translateY(-7px);
+}
+.inv-slot .lbl{font-size:14px;font-weight:bold;color:#555;margin-top:2px}
+.inv-slot.salad-slot{border-color:#44aa44;background:#f0fff0}
+
+/* 말풍선 */
+.bubble{
+  position:absolute;background:#fff;border-radius:16px;
+  padding:7px 13px;font-size:18px;
+  transform:translate(-50%,-100%) translateY(-16px);
+  box-shadow:2px 3px 10px rgba(0,0,0,.22);
+  pointer-events:none;white-space:nowrap;
+  border:2px solid #eee;text-align:center;line-height:1.5;
+  animation:bPop .25s ease-out;
+}
+.bubble::after{
+  content:'';position:absolute;bottom:-10px;left:50%;
+  transform:translateX(-50%);
+  border:10px solid transparent;border-top-color:#fff;border-bottom:none;
+}
+@keyframes bPop{
+  0%{transform:translate(-50%,-100%) translateY(-16px) scale(.4);opacity:0}
+  100%{transform:translate(-50%,-100%) translateY(-16px) scale(1);opacity:1}
+}
+
+/* 타이머 바 */
+.t-wrap{
+  position:absolute;width:70px;height:9px;
+  background:rgba(0,0,0,.18);border-radius:5px;
+  transform:translateX(-50%);
+}
+.t-fill{height:100%;border-radius:5px;transition:width .12s linear,background .3s}
+
+/* 플로팅 팝업 */
+.fpop{
+  position:absolute;transform:translateX(-50%);
+  animation:fUp 1.3s ease-out forwards;
+  pointer-events:none;white-space:nowrap;
+  font-weight:bold;font-size:20px;
+  text-shadow:1px 1px 4px rgba(0,0,0,.35);
+}
+@keyframes fUp{
+  0%{opacity:1;transform:translateX(-50%) translateY(0)}
+  100%{opacity:0;transform:translateX(-50%) translateY(-80px)}
+}
+
+/* 물주기 미니 패널 */
+#water-panel{
+  position:absolute;bottom:108px;right:18px;
+  background:rgba(255,248,220,.97);
+  border-radius:18px;padding:10px 14px;
+  pointer-events:all;
+  box-shadow:0 4px 16px rgba(0,0,0,.2);
+  border:2px solid #d4a843;
+}
+#water-panel h4{margin-bottom:8px;color:#5a3e1b;font-size:14px;text-align:center}
+.wr{display:flex;align-items:center;gap:6px;margin:5px 0}
+.wr .wi{font-size:18px}
+.wr .wp{flex:1;font-size:12px;color:#8b5e1b}
+.wr .wb{
+  border:none;border-radius:9px;padding:5px 9px;
+  font-size:12px;font-weight:bold;cursor:pointer;
+  background:#5bc8e8;color:#fff;transition:all .15s;
+}
+.wr .wb:hover:not(:disabled){background:#3aaacb;transform:scale(1.06)}
+.wr .wb:disabled{background:#ccc;color:#999;cursor:default}
+
+/* 수확 힌트 */
+#hint{
+  position:absolute;display:none;
+  background:rgba(0,0,0,.72);color:#fff;
+  border-radius:10px;padding:5px 11px;font-size:14px;
+  transform:translate(-50%,-100%) translateY(-8px);
+  pointer-events:none;white-space:nowrap;
+}
+
+/* 팁 */
+#tip{
+  position:absolute;bottom:108px;left:18px;
+  background:rgba(255,255,255,.88);
+  border-radius:16px;padding:10px 15px;
+  font-size:13px;line-height:2;color:#444;
+  pointer-events:none;
+  box-shadow:0 3px 10px rgba(0,0,0,.12);
+}
+
+/* 토스트 */
+.toast{
+  position:fixed;top:48%;left:50%;
+  transform:translate(-50%,-50%);
+  background:rgba(0,0,0,.78);color:#fff;
+  padding:12px 28px;border-radius:24px;
+  font-size:16px;z-index:999;
+  animation:fUp 2s ease-out forwards;white-space:nowrap;
+}
+
+/* 로딩 */
+#loading{
+  position:fixed;inset:0;background:#8ad488;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:22px;color:#fff;font-weight:bold;z-index:999;transition:opacity .5s;
+}
+.spin{font-size:72px;animation:spinY 1.5s linear infinite;display:block}
+@keyframes spinY{to{transform:rotateY(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <span class="spin">🐹</span>
+  <p style="margin-top:18px">기니 불러오는 중...</p>
+  <p style="margin-top:12px;font-size:13px;opacity:.7">v7 · <span id="boot-status">스크립트 대기...</span></p>
+</div>
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+  <div id="score-box">
+    <div class="score-pill">배부른 기니 <span id="score">0</span>마리</div>
+    <div class="score-pill hungry" id="hungry-pill">배고픈 기니 <span id="hungry">0</span>/10</div>
+  </div>
+  <div id="hint">클릭해서 수확!</div>
+
+  <div id="water-panel">
+    <h4>🚿 물주기</h4>
+    <div class="wr"><span class="wi">🍅</span><span class="wp" id="wp-t">💩 0/3</span><button class="wb" id="wb-t" onclick="waterGarden('tomato')" disabled>물주기</button></div>
+    <div class="wr"><span class="wi">🍓</span><span class="wp" id="wp-s">💩 0/3</span><button class="wb" id="wb-s" onclick="waterGarden('strawberry')" disabled>물주기</button></div>
+    <div class="wr"><span class="wi">🥬</span><span class="wp" id="wp-l">💩 0/3</span><button class="wb" id="wb-l" onclick="waterGarden('lettuce')" disabled>물주기</button></div>
+  </div>
+
+  <div id="inventory"></div>
+
+  <div id="tip">
+    🌱 텃밭 채소 <b>클릭</b>으로 수확<br>
+    🍽️ 인벤토리 선택 → <b>기니 클릭</b><br>
+    💩 기니 똥 3개 → 🚿 물주기<br>
+    🌱 물 주면 채소가 즉시 자라요!
+  </div>
+</div>
+
+<!-- 게임 오버 모달 -->
+<div id="gameover">
+  <div class="go-icon">😭</div>
+  <h1>게임 오버!</h1>
+  <p>배고픈 기니가 너무 많아졌어요...</p>
+  <div class="stats">
+    🐹 배부른 기니 : <b id="go-score">0</b> 마리<br>
+    😢 배고픈 기니 : <b id="go-hungry">0</b> 마리
+  </div>
+  <button id="restart-btn" onclick="restartGame()">🔄 다시 하기</button>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  최상단: 로딩 화면 숨기기 + 글로벌 에러 핸들러
+//  (모듈 스크립트 로드 실패해도 작동하도록 일반 스크립트로 분리)
+// ══════════════════════════════════════════════════
+(function() {
+  // 즉시 표시: 일반 스크립트가 실행됐다는 신호
+  const s = document.getElementById('boot-status');
+  if (s) s.textContent = '✅ 일반 스크립트 OK · 모듈 대기...';
+
+  // 3초 안에 모듈이 정상 시작 안 되면 강제로 로딩 숨기고 에러 표시
+  let moduleStarted = false;
+  window.__moduleStarted = () => {
+    moduleStarted = true;
+    const s = document.getElementById('boot-status');
+    if (s) s.textContent = '✅ 모듈 OK · 게임 시작!';
+  };
+
+  setTimeout(() => {
+    if (!moduleStarted) {
+      const el = document.getElementById('loading');
+      if (el) {
+        el.innerHTML = `
+          <div style="font-size:50px">⚠️</div>
+          <p style="margin-top:18px;font-size:18px">스크립트 로딩 실패</p>
+          <p style="margin-top:8px;font-size:14px;opacity:.85">F12 → Console 탭에서 에러를 확인해주세요</p>
+          <p style="margin-top:8px;font-size:13px;opacity:.7">(CDN 차단 또는 import 실패 가능)</p>
+          <button onclick="document.getElementById('loading').style.display='none'" style="margin-top:18px;padding:10px 24px;font-size:15px;border:none;border-radius:20px;background:#fff;color:#5a8;cursor:pointer;font-weight:bold">강제로 닫기</button>`;
+      }
+    }
+  }, 3000);
+
+  // 글로벌 에러 캐치 → 화면에 표시
+  window.addEventListener('error', e => {
+    const el = document.getElementById('loading');
+    if (el && el.style.display !== 'none') {
+      el.innerHTML = `
+        <div style="font-size:50px">❌</div>
+        <p style="margin-top:18px;font-size:18px">JavaScript 에러</p>
+        <p style="margin-top:8px;font-size:14px;max-width:90%;text-align:center;background:rgba(0,0,0,.3);padding:10px;border-radius:8px;font-family:monospace">${e.message}</p>
+        <p style="margin-top:8px;font-size:12px;opacity:.7">${e.filename}:${e.lineno}</p>`;
+    }
+    console.error('🔴 글로벌 에러:', e.message, e.filename, e.lineno);
+  });
+
+  window.addEventListener('unhandledrejection', e => {
+    console.error('🔴 Promise 에러:', e.reason);
+  });
+})();
+</script>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"}}
+</script>
+<script type="module">
+// 모듈 시작 신호
+window.__moduleStarted();
+
+// 로딩 화면 즉시 숨기기 (에러 나도 게임 화면은 보이게)
+(function hideLoading() {
+  const el = document.getElementById('loading');
+  if (el) {
+    el.style.opacity = '0';
+    setTimeout(() => el.style.display = 'none', 500);
+  }
+})();
+
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ═══════════════════════════════════════════════
+//  RENDERER & SCENE
+// ═══════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setSize(innerWidth, innerHeight);
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8ad488);
+scene.fog = new THREE.FogExp2(0x8ad488, 0.018);
+
+// 카메라: 바 좌석(왼쪽)과 텃밭(오른쪽)이 모두 보임
+const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(-1, 16, 15);
+camera.lookAt(5, 0, -1);
+
+// ═══════════════════════════════════════════════
+//  LIGHTING
+// ═══════════════════════════════════════════════
+scene.add(new THREE.AmbientLight(0xfff8e8, 1.15));
+const sun = new THREE.DirectionalLight(0xfffae0, 2.1);
+sun.position.set(5, 14, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -22; sun.shadow.camera.right = 22;
+sun.shadow.camera.top  = 22; sun.shadow.camera.bottom = -22;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0xd0e8ff, 0.5);
+fill.position.set(-6, 5, -5);
+scene.add(fill);
+
+// ═══════════════════════════════════════════════
+//  GROUND
+// ═══════════════════════════════════════════════
+const gnd = new THREE.Mesh(
+  new THREE.PlaneGeometry(60, 40),
+  new THREE.MeshLambertMaterial({ color: 0x7bc67a })
+);
+gnd.rotation.x = -Math.PI / 2;
+gnd.receiveShadow = true;
+scene.add(gnd);
+
+// ═══════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════
+const POOP_NEEDED = 3, SPAWN_INT = 7, MAX_WAIT = 20, MAX_GPs = 6;
+const EMOJI = {
+  tomato:'🍅', strawberry:'🍓', lettuce:'🥬',
+  salad:'🥗',
+  strawberry_salad:'🥗🍓', tomato_salad:'🥗🍅'
+};
+const LABEL = {
+  tomato:'토마토', strawberry:'딸기', lettuce:'상추',
+  salad:'샐러드',
+  strawberry_salad:'딸기 샐러드', tomato_salad:'토마토 샐러드'
+};
+// 기본 주문 메뉴 (점수 20점부터 확장됨)
+const ORDERS_BASIC = ['tomato','strawberry','lettuce','salad'];
+const ORDERS_EXTRA = ['strawberry_salad','tomato_salad'];
+function currentOrderPool() {
+  return gs.score >= 20 ? [...ORDERS_BASIC, ...ORDERS_EXTRA] : ORDERS_BASIC;
+}
+// 기니 앉는 자리: 3자리씩 2줄 (앞줄 = 카메라쪽 +Z, 뒷줄 = -Z쪽)
+const SEAT_POS = [
+  // 뒷줄 (z = -1.0)
+  { x: -7.0, z: -1.0 },
+  { x: -3.0, z: -1.0 },
+  { x:  1.0, z: -1.0 },
+  // 앞줄 (z = 2.5)
+  { x: -7.0, z:  2.5 },
+  { x: -3.0, z:  2.5 },
+  { x:  1.0, z:  2.5 },
+];
+// 텃밭 (확장 버전)
+const GX = 11.0, GZ = -1.2;
+const GARDEN_W = 9.0, GARDEN_D = 14.0;  // 가로(X) 9, 세로(Z) 14
+const VEG_DEFS = {
+  tomato:     { z: GZ+5.0, fc: 0xdd2222, sc: 0x2a7a22, lc: 0x44aa33 },
+  strawberry: { z: GZ+0.0, fc: 0xff3388, sc: 0x228833, lc: 0x55bb44 },
+  lettuce:    { z: GZ-5.0, fc: 0x44cc44, sc: 0x228833, lc: 0x66dd44 },
+};
+
+// ═══════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════
+const gs = {
+  score:0,
+  inventory:[],
+  selectedType:null,
+  guineaPigs:[],
+  spawnTimer: SPAWN_INT - 2,
+  gpCount:0,
+  usedSlots: new Set(),
+  garden:{
+    tomato:     {ready:5,poop:0,poopMeshes:[],fruits:[],stems:[],leaves:[]},
+    strawberry: {ready:5,poop:0,poopMeshes:[],fruits:[],stems:[],leaves:[]},
+    lettuce:    {ready:5,poop:0,poopMeshes:[],fruits:[],stems:[],leaves:[]},
+  },
+  hungry:0,        // 배고픈 채로 떠난 기니 수
+  gameOver:false,
+};
+
+// 음식 날아가는 애니메이션 목록
+const foodAnims = [];
+
+// ═══════════════════════════════════════════════
+//  GARDEN BED (확장)
+// ═══════════════════════════════════════════════
+const gardenBed = new THREE.Mesh(
+  new THREE.BoxGeometry(GARDEN_W, 0.55, GARDEN_D),
+  new THREE.MeshLambertMaterial({ color: 0x7a5230 })
+);
+gardenBed.position.set(GX, 0.275, GZ);
+gardenBed.receiveShadow = true;
+scene.add(gardenBed);
+
+const woodMat = new THREE.MeshLambertMaterial({ color: 0x4a2e10 });
+// 긴 변(Z 끝단) 두 개
+[[-GARDEN_D/2,0], [GARDEN_D/2,0]].forEach(([z])=>{
+  const p = new THREE.Mesh(new THREE.BoxGeometry(GARDEN_W+0.3, 0.75, 0.24), woodMat);
+  p.position.set(GX, 0.38, GZ+z);
+  p.castShadow = true; scene.add(p);
+});
+// 짧은 변(X 끝단) 두 개
+[[-GARDEN_W/2,0], [GARDEN_W/2,0]].forEach(([x])=>{
+  const p = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.75, GARDEN_D+0.4), woodMat);
+  p.position.set(GX+x, 0.38, GZ);
+  p.castShadow = true; scene.add(p);
+});
+// 구역 구분선 (각 채소 구역 사이)
+[-GARDEN_D/6, GARDEN_D/6].forEach(z=>{
+  const d = new THREE.Mesh(new THREE.BoxGeometry(GARDEN_W-0.3, 0.5, 0.16), woodMat);
+  d.position.set(GX, 0.38, GZ+z);
+  scene.add(d);
+});
+
+// ═══════════════════════════════════════════════
+//  VEGETABLE PLANTS (GLB 모델 사용 / 클릭 가능)
+// ═══════════════════════════════════════════════
+const harvestables = [];
+
+// GLB 분석 결과 기반 스케일/오프셋
+//  - tomato:     크기 0.8 × 2.6 × 5.0 (Z up = 위 방향 5)
+//  - strawberry: 크기 5.1 × 5.8 × 8.8 (이미 큼)
+//  - lettuce:    크기 4.8 × 5.0 × 5.9
+// 각 채소의 목표 높이(게임 단위) — 실제 GLB 크기와 무관하게 자동 스케일됨
+const GLB_CONFIG = {
+  tomato:     { file: 'guinea/tomato.glb',     targetHeight: 3.2, spacing: 1.5 },
+  strawberry: { file: 'guinea/strawberry.glb', targetHeight: 2.8, spacing: 1.7 },
+  lettuce:    { file: 'guinea/lettuce.glb',    targetHeight: 2.0, spacing: 1.7 },
+};
+
+// 텃밭 표면 Y좌표 (gardenBed 상단)
+const SOIL_Y = 0.55;  // gardenBed.position.y(0.275) + height/2(0.275)
+
+// GLB 씬 캐시 — 한 번만 로드, 측정 정보 같이 저장
+const glbVegCache = {};
+const glbVegLoader = new GLTFLoader();
+
+function loadVegGLB(type, callback) {
+  if (glbVegCache[type]) {
+    callback(glbVegCache[type]);
+    return;
+  }
+  const cfg = GLB_CONFIG[type];
+  const candidates = [cfg.file, '../' + cfg.file];
+
+  function tryLoad(idx) {
+    if (idx >= candidates.length) {
+      console.warn(`❌ GLB 식물 로드 실패: ${type}`);
+      callback(null);
+      return;
+    }
+    glbVegLoader.load(
+      candidates[idx],
+      gltf => {
+        const root = gltf.scene;
+        // 그림자 설정만 (색상/머티리얼 건드리지 않음)
+        root.traverse(c => {
+          if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
+        });
+
+        // ── 핵심: 바운딩 박스 측정해서 자동 스케일 + 바닥 정렬 ──
+        // GLB의 자체 transform(노드별 translation/scale 등)이 모두 반영된 월드 박스
+        root.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(root);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+
+        // 자동 스케일: 목표 높이 / 실제 높이
+        const autoScale = cfg.targetHeight / size.y;
+        // 스케일 적용 후의 바운딩 박스 정보를 저장
+        // (스케일 후 minY = box.min.y * autoScale)
+        const scaledMinY = box.min.y * autoScale;
+
+        const cached = { root, autoScale, scaledMinY, originalSize: size.clone() };
+        glbVegCache[type] = cached;
+
+        console.log(`✅ GLB 식물 로드: ${type} | 원본크기 ${size.x.toFixed(2)}×${size.y.toFixed(2)}×${size.z.toFixed(2)} → 스케일 ${autoScale.toFixed(3)} (높이 ${cfg.targetHeight})`);
+        callback(cached);
+      },
+      undefined,
+      () => tryLoad(idx + 1)
+    );
+  }
+  tryLoad(0);
+}
+
+function buildPlants(type, def) {
+  const gd = gs.garden[type];
+  const cfg = GLB_CONFIG[type];
+
+  const positions = [];
+  for (let i = 0; i < 5; i++) {
+    positions.push(GX + (-cfg.spacing*2 + i * cfg.spacing));
+  }
+
+  // placeholder (투명, 클릭 영역만)
+  positions.forEach((ox, i) => {
+    const placeholder = new THREE.Mesh(
+      new THREE.SphereGeometry(.6, 8, 6),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    placeholder.position.set(ox, SOIL_Y + cfg.targetHeight/2, def.z);
+    placeholder.userData = { vegType: type, idx: i, isPlaceholder: true };
+    scene.add(placeholder);
+    gd.fruits.push(placeholder);
+    harvestables.push(placeholder);
+  });
+
+  // GLB 로드 후 진짜 모델로 교체
+  loadVegGLB(type, cached => {
+    if (!cached) return;
+    const { root, autoScale, scaledMinY } = cached;
+
+    // 식물의 바닥(스케일 후 minY)을 SOIL_Y에 정확히 맞추기 위한 wrapper Y 위치
+    // wrapper.position.y + scaledMinY = SOIL_Y  →  wrapper.position.y = SOIL_Y - scaledMinY
+    const wrapperY = SOIL_Y - scaledMinY;
+
+    positions.forEach((ox, i) => {
+      const oldMesh = gd.fruits[i];
+
+      const wrapper = new THREE.Group();
+      wrapper.position.set(ox, wrapperY, def.z);
+      wrapper.scale.setScalar(autoScale);
+      wrapper.rotation.y = (i * 0.7) % (Math.PI * 2);
+      // wrapper에만 isWrapper 플래그 — raycast 시 정확히 wrapper를 식별
+      wrapper.userData = { vegType: type, idx: i, isWrapper: true };
+
+      // GLB scene 클론 (머티리얼/색상 그대로 유지)
+      const inst = root.clone(true);
+      // inst와 자식들엔 vegType만 표시 (isWrapper는 없음)
+      inst.userData = { vegType: type };
+      inst.traverse(c => {
+        if (c.isMesh) c.userData = { vegType: type };
+      });
+      wrapper.add(inst);
+
+      scene.add(wrapper);
+
+      // 교체
+      scene.remove(oldMesh);
+      gd.fruits[i] = wrapper;
+      const hi = harvestables.indexOf(oldMesh);
+      if (hi !== -1) harvestables[hi] = wrapper;
+
+      wrapper.visible = i < gd.ready;
+    });
+  });
+}
+Object.entries(VEG_DEFS).forEach(([t,d]) => buildPlants(t,d));
+
+function refreshPlants(type) {
+  const gd = gs.garden[type];
+  gd.fruits.forEach((f, i) => {
+    f.visible = i < gd.ready;
+  });
+}
+Object.keys(VEG_DEFS).forEach(refreshPlants);
+
+// ═══════════════════════════════════════════════
+//  WATERING CAN (필요할 때만 생성)
+// ═══════════════════════════════════════════════
+function makeWateringCan() {
+  const grp = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x909090 });
+  const spoutMat = new THREE.MeshLambertMaterial({ color: 0x808080 });
+  const handleMat = new THREE.MeshLambertMaterial({ color: 0x777777 });
+
+  // 본체
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.43,.53,1.3,14), bodyMat);
+  body.castShadow = true;
+  grp.add(body);
+  // 주둥이
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(.07,.13,1.1,8), spoutMat);
+  spout.rotation.z = -Math.PI/4;
+  spout.position.set(.52, .35, 0);
+  spout.castShadow = true;
+  grp.add(spout);
+  // 손잡이
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(.32,.055,8,20,Math.PI), handleMat);
+  handle.position.set(-.28, .2, 0);
+  handle.rotation.z = Math.PI/2;
+  grp.add(handle);
+
+  // 주둥이 끝 위치 (월드 좌표 계산용)
+  grp.userData.spoutTip = new THREE.Vector3(.52 + Math.sin(Math.PI/4)*0.55, .35 + Math.cos(Math.PI/4)*0.55, 0);
+  return grp;
+}
+
+// 활성 물뿌리개 + 물방울들
+const activeCans = []; // { canGrp, droplets:[], state, t, target, ... }
+
+// ═══════════════════════════════════════════════
+//  PLATES (기니 앞에 놓인 접시)
+// ═══════════════════════════════════════════════
+const plateMeshes = []; // SEAT_POS 순서대로 접시 mesh 저장
+const plateMat = new THREE.MeshLambertMaterial({ color: 0xf5f5f0 });
+const plateRimMat = new THREE.MeshLambertMaterial({ color: 0xe0ddd8 });
+
+SEAT_POS.forEach(sp => {
+  // 접시 바닥
+  const plate = new THREE.Mesh(
+    new THREE.CylinderGeometry(.68,.72,.08,32),
+    plateMat
+  );
+  // 기니 앞쪽(카메라 쪽) z+1.4
+  plate.position.set(sp.x, 0.05, sp.z + 1.4);
+  plate.receiveShadow = true;
+  scene.add(plate);
+
+  // 접시 테두리 링
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(.68,.045,8,32),
+    plateRimMat
+  );
+  rim.rotation.x = Math.PI/2;
+  rim.position.set(sp.x, 0.1, sp.z + 1.4);
+  scene.add(rim);
+
+  plateMeshes.push(plate);
+});
+
+// ═══════════════════════════════════════════════
+//  FOOD MESH FACTORY
+// ═══════════════════════════════════════════════
+const FOOD_COLORS = { tomato:0xdd2222, strawberry:0xff3388, lettuce:0x44cc44, salad:0x55aa33 };
+
+function makeFoodMesh(type) {
+  // 샐러드 베이스 (초록 잎 더미)
+  const buildSaladBase = () => {
+    const g = new THREE.Group();
+    const sm = new THREE.MeshLambertMaterial({ color: 0x55aa33 });
+    [[0,.1,0],[.15,0,.1],[-.15,0,.1],[0,0,-.15]].forEach(([x,y,z]) => {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(.16,8,6), sm);
+      s.position.set(x,y,z); g.add(s);
+    });
+    return g;
+  };
+
+  let geo;
+  if      (type==='tomato')     geo=new THREE.SphereGeometry(.24,12,8);
+  else if (type==='strawberry') geo=new THREE.ConeGeometry(.2,.4,10);
+  else if (type==='lettuce')    { geo=new THREE.SphereGeometry(.26,10,8); geo.applyMatrix4(new THREE.Matrix4().makeScale(1.4,.7,1.3)); }
+  else if (type==='salad') {
+    return buildSaladBase();
+  }
+  else if (type==='strawberry_salad') {
+    const g = buildSaladBase();
+    // 작은 딸기 두 개를 위에 얹기
+    const fm = new THREE.MeshLambertMaterial({ color: 0xff3388 });
+    [[0.05,.22,0.05],[-0.08,.22,-0.05]].forEach(([x,y,z]) => {
+      const berry = new THREE.Mesh(new THREE.ConeGeometry(.13,.25,10), fm);
+      berry.position.set(x,y,z);
+      berry.rotation.x = Math.PI;
+      g.add(berry);
+    });
+    return g;
+  }
+  else if (type==='tomato_salad') {
+    const g = buildSaladBase();
+    // 작은 토마토 두 개를 위에 얹기
+    const fm = new THREE.MeshLambertMaterial({ color: 0xdd2222 });
+    [[0.05,.22,0.05],[-0.08,.22,-0.05]].forEach(([x,y,z]) => {
+      const tom = new THREE.Mesh(new THREE.SphereGeometry(.13,10,8), fm);
+      tom.position.set(x,y,z);
+      g.add(tom);
+    });
+    return g;
+  }
+  return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color:FOOD_COLORS[type]}));
+}
+
+// 2차 베지어 곡선
+function bezier2(p0, p1, p2, t) {
+  const a = p0.clone().lerp(p1, t);
+  const b = p1.clone().lerp(p2, t);
+  return a.lerp(b, t);
+}
+
+// 음식 날리기
+function launchFood(type, targetPos, onLand) {
+  const mesh = makeFoodMesh(type);
+  // 시작: 화면 아래쪽(인벤토리 위치)을 3D로 변환
+  // NDC (0, -0.75, 0.5) → 언프로젝트
+  const ndc = new THREE.Vector3(0, -0.75, 0.5);
+  const startPos = ndc.clone().unproject(camera);
+  // 너무 멀면 보정
+  const camDir = startPos.clone().sub(camera.position).normalize();
+  const start = camera.position.clone().add(camDir.multiplyScalar(6));
+
+  mesh.position.copy(start);
+  scene.add(mesh);
+
+  // 제어점: 중간 높이에서 크게 포물선
+  const ctrl = start.clone().lerp(targetPos, 0.45);
+  ctrl.y += 5.5;
+
+  foodAnims.push({
+    mesh, start: start.clone(), ctrl, end: targetPos.clone(),
+    t: 0, dur: 0.75,
+    onLand
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  GLB MODEL LOADING
+//  server.py 가 '과제2026/' 에서 실행되므로
+//  상대 경로 'guinea/guinea.glb' 로 접근 가능
+// ═══════════════════════════════════════════════
+let gpTemplate = null;
+
+// ══════════════════════════════════════════════════
+//  기니피그 색상 시스템
+//  brown / allbrown / black 각 33%, albino 1%
+// ══════════════════════════════════════════════════
+const COAT_COLORS = ['brown', 'allbrown', 'black', 'albino'];
+const COAT_WEIGHTS = [33, 33, 33, 1];  // 합계 100
+
+function pickRandomCoat() {
+  const total = COAT_WEIGHTS.reduce((a,b) => a+b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < COAT_COLORS.length; i++) {
+    r -= COAT_WEIGHTS[i];
+    if (r < 0) return COAT_COLORS[i];
+  }
+  return COAT_COLORS[0];
+}
+
+// 로드된 텍스처 보관 (color → {body, ear, eye})
+const guineaTextures = {};
+let texturesLoaded = false;
+
+function loadGuineaTextures(prefix) {
+  const loader = new THREE.TextureLoader();
+  const setupTex = tex => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.flipY = false;       // glTF 규약: UV 뒤집지 않음
+    tex.needsUpdate = true;
+    return tex;
+  };
+
+  let pendingCount = 0;
+  let doneCount = 0;
+  const onOne = () => {
+    doneCount++;
+    if (doneCount >= pendingCount) {
+      texturesLoaded = true;
+      console.log(`🎨 텍스처 ${doneCount}개 로드 완료`);
+    }
+  };
+
+  COAT_COLORS.forEach(color => {
+    guineaTextures[color] = {};
+    const eyeFile = (color === 'albino') ? 'gini_eyealbino.png' : 'gini_eye.png';
+    const files = {
+      body: `${prefix}gini_${color}.png`,
+      ear:  `${prefix}giniear_${color}.png`,
+      eye:  `${prefix}${eyeFile}`,
+    };
+    Object.entries(files).forEach(([part, url]) => {
+      pendingCount++;
+      loader.load(
+        url,
+        tex => { guineaTextures[color][part] = setupTex(tex); onOne(); },
+        undefined,
+        err => { console.warn(`텍스처 로드 실패: ${url}`); onOne(); }
+      );
+    });
+  });
+}
+
+// 클론된 기니피그 모델에 색상 텍스처 적용
+function applyCoatColor(rootObj, color) {
+  if (!texturesLoaded || !guineaTextures[color]) return false;
+  const tex = guineaTextures[color];
+
+  rootObj.traverse(c => {
+    if (!c.isMesh) return;
+    // 어느 노드(body/ear/eye)에 속하는지 부모 트리에서 찾기
+    let p = c, partName = null;
+    while (p) {
+      if (p.name === 'body' || p.name === 'ear' || p.name === 'eye') {
+        partName = p.name;
+        break;
+      }
+      p = p.parent;
+    }
+    if (!partName) return;
+
+    // 머티리얼은 인스턴스마다 독립적으로 (clone 안 하면 다른 기니피그도 같이 변함)
+    c.material = c.material.clone();
+
+    if (partName === 'body' && tex.body) {
+      c.material.map = tex.body;
+    } else if (partName === 'ear' && tex.ear) {
+      c.material.map = tex.ear;
+    } else if (partName === 'eye' && tex.eye) {
+      // 'eye' 메쉬는 두 프리미티브(왼/오른쪽 눈)이며 둘 중 하나는 원본에서
+      // 텍스처가 없는 흰색 머티리얼임. 양쪽 모두에 동일 텍스처 적용해야 함.
+      c.material.map = tex.eye;
+      c.material.color.set(0xffffff);  // baseColor 흰색으로 → 텍스처 색이 그대로 보이게
+    }
+    c.material.needsUpdate = true;
+  });
+  return true;
+}
+
+// ══════════════════════════════════════════════════
+//  GLB 진단 + 로드
+//  → F12(개발자도구) → Console 탭에서 결과를 보면 정확한 원인을 알 수 있음
+// ══════════════════════════════════════════════════
+async function diagnoseAndLoadGLB() {
+  console.log('━━━━━━━━━━ GLB 진단 시작 ━━━━━━━━━━');
+  console.log(`현재 페이지 URL: ${location.href}`);
+  console.log(`baseURI       : ${document.baseURI}`);
+
+  const candidates = ['guinea/guinea.glb', '../guinea/guinea.glb'];
+
+  for (const path of candidates) {
+    const fullURL = new URL(path, document.baseURI).href;
+    console.log(`\n🔍 테스트: ${path}`);
+    console.log(`   → 실제 URL: ${fullURL}`);
+
+    // 1단계: fetch()로 파일 존재 여부 확인
+    let res;
+    try {
+      res = await fetch(fullURL);
+    } catch (e) {
+      console.error(`   ❌ fetch 실패 (네트워크 오류): ${e.message}`);
+      continue;
+    }
+    console.log(`   📡 HTTP 상태: ${res.status} ${res.statusText}`);
+    console.log(`   📦 Content-Type: ${res.headers.get('content-type') || '(없음)'}`);
+    console.log(`   📏 Content-Length: ${res.headers.get('content-length') || '(없음)'}`);
+
+    if (!res.ok) {
+      console.warn(`   ⚠️ HTTP ${res.status} - 이 경로엔 파일이 없음`);
+      continue;
+    }
+
+    // 2단계: 실제 바이트 받아오기
+    let buf;
+    try {
+      buf = await res.arrayBuffer();
+      console.log(`   ✅ 다운로드 성공: ${buf.byteLength} bytes`);
+      // GLB 매직 넘버 확인 (첫 4바이트 = "glTF")
+      const magic = new TextDecoder().decode(new Uint8Array(buf.slice(0, 4)));
+      console.log(`   🔬 매직 넘버: "${magic}" ${magic === 'glTF' ? '(✅ 유효한 GLB)' : '(❌ GLB가 아님!)'}`);
+      if (magic !== 'glTF') {
+        console.error(`   ❌ 파일 내용이 GLB 형식이 아닙니다. HTML이나 다른 파일이 반환됐을 수 있습니다.`);
+        const txt = new TextDecoder().decode(new Uint8Array(buf.slice(0, 200)));
+        console.log(`   첫 200자 미리보기:`, txt);
+        continue;
+      }
+    } catch (e) {
+      console.error(`   ❌ 다운로드 중 오류: ${e.message}`);
+      continue;
+    }
+
+    // 3단계: GLTFLoader로 파싱
+    console.log(`   🔄 GLTFLoader로 파싱 중...`);
+    try {
+      const gltf = await new Promise((resolve, reject) => {
+        new GLTFLoader().parse(buf, '', resolve, reject);
+      });
+      // ── 모델 방향 보정 ──
+      // 분석 결과: 블렌더 모델의 기본 정면 = -X 방향
+      //   (눈 위치 X=-1.9, 귀 위치 X=-1.5 → 머리가 -X쪽)
+      // wrapper Group에 넣고 +π/2 회전을 걸어서 기본 정면을 +Z(카메라쪽)로 맞춤
+      const inner = gltf.scene;
+      inner.rotation.y = Math.PI / 2;   // -X → +Z로 정면 보정
+      const wrapper = new THREE.Group();
+      wrapper.add(inner);
+      wrapper.scale.set(0.55, 0.55, 0.55);
+      gpTemplate = wrapper;
+
+      let meshCount = 0;
+      gpTemplate.traverse(c => {
+        if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; meshCount++; }
+      });
+      console.log(`   🎉 파싱 성공! 메쉬 ${meshCount}개 · 정면 보정 적용 완료(+Z)`);
+
+      // ── 텍스처 로딩 (이 GLB가 있던 폴더의 같은 위치에서 PNG들 로드) ──
+      const prefix = path.replace(/guinea\.glb$/, '');  // 예: 'guinea/' 또는 '../guinea/'
+      loadGuineaTextures(prefix);
+
+      console.log('━━━━━━━━━━ GLB 진단 완료 ━━━━━━━━━━');
+      return;
+    } catch (e) {
+      console.error(`   ❌ GLTFLoader 파싱 실패: ${e.message || e}`);
+    }
+  }
+
+  console.error('━━━━━━━━━━ 모든 GLB 경로 실패 ━━━━━━━━━━');
+  console.warn('💡 점검 사항:');
+  console.warn('  1. 서버를 어느 폴더에서 실행했는지 확인 (server.py 출력 메시지)');
+  console.warn('  2. 그 폴더에 "guinea/guinea.glb" 또는 "../guinea/guinea.glb" 가 있는지');
+  console.warn('  3. 파일 이름에 오타나 공백이 없는지 (정확히 "guinea.glb")');
+  console.warn('  4. 위 콘솔의 HTTP 상태 코드와 매직 넘버 확인');
+}
+
+diagnoseAndLoadGLB();
+
+// ═══════════════════════════════════════════════
+//  GUINEA PIG CLASS
+// ═══════════════════════════════════════════════
+const GP_COLORS = [0xc89050,0x7a4e2d,0xd4aa70,0x5c3018,0xa06838,0xe0c080];
+
+class GuineaPig {
+  constructor() {
+    this.id    = gs.gpCount++;
+    this.slot  = this.pickSlot();
+    this.coat  = pickRandomCoat();   // 'brown'/'allbrown'/'black'/'albino'
+    this.color = GP_COLORS[this.id % GP_COLORS.length];  // 폴백 모델용
+    const pool = currentOrderPool();
+    this.order = pool[Math.floor(Math.random()*pool.length)];
+
+    const sp = SEAT_POS[this.slot];
+    this.seatX = sp.x; this.seatZ = sp.z;
+    // 접시 위치 (기니 앞)
+    this.platePos = new THREE.Vector3(sp.x, 0.12, sp.z + 1.4);
+
+    this.speed  = 2.8 + Math.random()*.6;
+    this.walkT  = Math.random()*Math.PI*2;
+    this.waitT  = 0; this.stT = 0;
+    this.state  = 'walking';
+    this.foodOnPlate = null; // 접시 위 음식 mesh
+    this.poopTargetType = null; // happy 시 결정될 타겟 채소 구역
+    this.poopTargetX = 0;
+    this.poopTargetZ = 0;
+
+    this.obj = this.buildObj();
+    this.obj.position.set(-14, 0, this.seatZ);
+    // 보정 후: 0=카메라쪽(+Z), π/2=오른쪽(+X), π=뒤쪽(-Z), -π/2=왼쪽(-X)
+    this.obj.rotation.y = Math.PI / 2;  // 오른쪽(+X) 향해서 걷기
+    scene.add(this.obj);
+
+    this.bubbleEl = this.makeBubble();
+    this.timerEl  = this.makeTimer();
+    gs.usedSlots.add(this.slot);
+  }
+
+  pickSlot() {
+    for (let i=0;i<SEAT_POS.length;i++) if (!gs.usedSlots.has(i)) return i;
+    return 0;
+  }
+
+  buildObj() {
+    const g = new THREE.Group();
+    g.userData.gp = this;
+
+    if (gpTemplate) {
+      // ── 블렌더 GLB 모델 사용 ──
+      const clone = gpTemplate.clone(true);
+      clone.userData.gp = this;
+      clone.traverse(c=>{ if(c.isMesh) c.userData.gp=this; });
+
+      // 색상 텍스처 적용 (33%/33%/33%/1%)
+      const applied = applyCoatColor(clone, this.coat);
+      if (applied) console.log(`🐹 #${this.id} 색상: ${this.coat}`);
+
+      g.add(clone);
+    } else {
+      // ── 폴백 모델 ──
+      this.buildFallback(g);
+    }
+
+    // 클릭 히트박스 (항상 추가)
+    const hb = new THREE.Mesh(
+      new THREE.SphereGeometry(.9),
+      new THREE.MeshBasicMaterial({visible:false})
+    );
+    hb.userData.gp = this;
+    g.add(hb);
+    return g;
+  }
+
+  buildFallback(g) {
+    const bm = new THREE.MeshLambertMaterial({color:this.color});
+    const em = new THREE.MeshLambertMaterial({color:0x111111});
+    const nm = new THREE.MeshLambertMaterial({color:0xff8899});
+    const rm = new THREE.MeshLambertMaterial({color:0xff9999});
+    const mk = (geo,mat,x,y,z,sx=1,sy=1,sz=1)=>{
+      const m=new THREE.Mesh(geo,mat);
+      m.position.set(x,y,z); m.scale.set(sx,sy,sz);
+      m.castShadow=true; m.userData.gp=this; g.add(m);
+    };
+    mk(new THREE.SphereGeometry(.48,16,12),bm,0,0,0,1.4,.9,1.8);
+    mk(new THREE.SphereGeometry(.38,14,10),bm,0,.16,.82);
+    mk(new THREE.SphereGeometry(.057),em,-0.14,.26,1.14);
+    mk(new THREE.SphereGeometry(.057),em, 0.14,.26,1.14);
+    mk(new THREE.SphereGeometry(.068),nm,0,.1,1.17);
+    mk(new THREE.SphereGeometry(.09),nm,-.21,.07,1.1);
+    mk(new THREE.SphereGeometry(.09),nm, .21,.07,1.1);
+    mk(new THREE.SphereGeometry(.13),rm,-.25,.48,.72);
+    mk(new THREE.SphereGeometry(.13),rm, .25,.48,.72);
+    [[-0.3,-.35,.58],[.3,-.35,.58],[-.3,-.35,-.42],[.3,-.35,-.42]]
+      .forEach(([x,y,z])=>mk(new THREE.CylinderGeometry(.075,.075,.28,8),bm,x,y,z));
+  }
+
+  makeBubble() {
+    const el = document.createElement('div');
+    el.className = 'bubble'; el.style.display = 'none';
+    // 메뉴별 표시
+    let big, sub;
+    if (this.order === 'salad') {
+      big = '🥗'; sub = '🍅+🍓+🥬';
+    } else if (this.order === 'strawberry_salad') {
+      big = '🥗🍓'; sub = '🥗+🍓';
+    } else if (this.order === 'tomato_salad') {
+      big = '🥗🍅'; sub = '🥗+🍅';
+    } else {
+      big = EMOJI[this.order]; sub = '';
+    }
+    el.innerHTML = big +
+      (sub ? `<br><span style="font-size:12px">${sub}</span>` : '') +
+      `<br><span style="font-size:11px;color:#888">${LABEL[this.order]}</span>`;
+    document.getElementById('ui').appendChild(el);
+    return el;
+  }
+
+  makeTimer() {
+    const w=document.createElement('div');
+    w.className='t-wrap'; w.style.display='none';
+    const f=document.createElement('div');
+    f.className='t-fill'; f.style.cssText='width:100%;background:#4CAF50';
+    w.appendChild(f); document.getElementById('ui').appendChild(w);
+    return w;
+  }
+
+  update(delta) {
+    this.stT+=delta; this.walkT+=delta*8;
+
+    switch(this.state) {
+      case 'walking': {
+        this.obj.position.x += this.speed*delta;
+        this.obj.position.y = Math.abs(Math.sin(this.walkT))*.07;
+        if (this.obj.position.x >= this.seatX) {
+          this.obj.position.x=this.seatX; this.obj.position.y=0;
+          this.obj.rotation.y=0; // 카메라 방향 봄
+          this.setState('sitting');
+          this.bubbleEl.style.display='block';
+          this.timerEl.style.display='block';
+        }
+        break;
+      }
+      case 'sitting': {
+        this.waitT+=delta;
+        this.obj.position.y=Math.sin(this.walkT*.4)*.022;
+        const ratio=Math.max(0,1-this.waitT/MAX_WAIT);
+        const fill=this.timerEl.firstChild;
+        fill.style.width=(ratio*100)+'%';
+        fill.style.background=ratio>.5?'#4CAF50':ratio>.25?'#FF9800':'#f44336';
+        if(this.waitT>=MAX_WAIT){this.remove(false);}
+        break;
+      }
+      case 'food_coming': {
+        // 음식 날아오는 중 - 설레는 대기
+        this.obj.position.y=Math.abs(Math.sin(this.walkT*.6))*.05;
+        this.obj.rotation.z=Math.sin(this.walkT*.3)*.04;
+        break;
+      }
+      case 'eating': {
+        // 냠냠 애니메이션
+        this.obj.position.y=Math.abs(Math.sin(this.walkT))*.18;
+        this.obj.rotation.z=Math.sin(this.walkT*.6)*.14;
+        // 접시 위 음식 스케일 줄이기 (먹는 느낌)
+        if (this.foodOnPlate) {
+          const sc=Math.max(0, 1-this.stT/1.2);
+          if (this.foodOnPlate.scale) this.foodOnPlate.scale.setScalar(sc);
+          else this.foodOnPlate.children?.forEach(c=>c.scale?.setScalar(sc));
+          if (this.stT>1.2) { scene.remove(this.foodOnPlate); this.foodOnPlate=null; }
+        }
+        if(this.stT>1.8){
+          this.setState('happy');
+          gs.score++; document.getElementById('score').textContent=gs.score;
+          showFloat(this.obj.position.clone().add(new THREE.Vector3(0,1.7,0)),'❤️','#ff3366');
+        }
+        break;
+      }
+      case 'happy': {
+        // 자기가 먹은 음식의 채소 구역으로 이동
+        // 샐러드면 랜덤 구역
+        if (!this.poopTargetType) {
+          if (this.order === 'salad') {
+            const types = ['tomato','strawberry','lettuce'];
+            this.poopTargetType = types[Math.floor(Math.random()*3)];
+          } else {
+            this.poopTargetType = this.order;
+          }
+          // 텃밭 가장자리 (텃밭 좌측 변 = X 7.25 - 약간 여유)
+          // 채소 구역의 z 위치로 이동 (텃밭 안으로 들어가지 않음)
+          const def = VEG_DEFS[this.poopTargetType];
+          this.poopTargetX = GX - GARDEN_W/2 - 0.8;  // 텃밭 왼쪽 가장자리 바로 옆
+          this.poopTargetZ = def.z;
+        }
+        // 목표 위치로 이동
+        const dx = this.poopTargetX - this.obj.position.x;
+        const dz = this.poopTargetZ - this.obj.position.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        if (dist < 0.15) {
+          this.setState('pooping');
+          this.doPoop();
+        } else {
+          const sp = 4.0;
+          this.obj.position.x += (dx/dist) * sp * delta;
+          this.obj.position.z += (dz/dist) * sp * delta;
+          this.obj.position.y = Math.abs(Math.sin(this.walkT))*.09;
+          // 이동 방향을 바라보도록
+          this.obj.rotation.y = Math.atan2(dx, dz);
+          this.obj.rotation.z = 0;
+        }
+        break;
+      }
+      case 'pooping': {
+        this.obj.position.y = Math.sin(this.walkT*.6)*.04;
+        // 텃밭(+X) 쪽으로 엉덩이 보이게
+        this.obj.rotation.y = -Math.PI/2;  // -X 방향(왼쪽=카메라쪽) 보고, 엉덩이가 +X(텃밭)
+        if(this.stT>2.2) this.remove(true);
+        break;
+      }
+    }
+    this.syncHTML();
+  }
+
+  setState(s){this.state=s;this.stT=0;}
+
+  // 음식 클릭 처리 → 날아가는 애니메이션 시작
+  receiveFeed(foodType) {
+    if(this.state!=='sitting') return false;
+    const ok = this.matchesOrder(foodType);
+    if(ok){
+      this.bubbleEl.style.display='none';
+      this.timerEl.style.display='none';
+      this.setState('food_coming');
+
+      // 음식이 접시에 착지하면 → 먹기 시작
+      launchFood(foodType, this.platePos, (landedMesh)=>{
+        this.foodOnPlate = landedMesh;
+        this.setState('eating');
+      });
+      return true;
+    } else {
+      showFloat(this.obj.position.clone().add(new THREE.Vector3(0,1.5,0)),'😤 다른거요!','#ff4444');
+      return false;
+    }
+  }
+
+  // 주문과 음식이 일치하는지 확인 (샐러드 변형 포함)
+  matchesOrder(foodType) {
+    return foodType === this.order;
+  }
+
+  doPoop(){
+    // 자신이 정한 타겟 채소 구역에 똥을 쌈
+    const type = this.poopTargetType || ['tomato','strawberry','lettuce'][Math.floor(Math.random()*3)];
+    const gd = gs.garden[type];
+    gd.poop++;
+    updateWaterPanel();
+    showFloat(this.obj.position.clone().add(new THREE.Vector3(0,1.2,0)),'💩','#8B4513');
+    // 똥 mesh - 기니 엉덩이 뒤쪽(+X = 텃밭 안쪽)에 떨어짐
+    const pm = new THREE.Mesh(
+      new THREE.SphereGeometry(.15, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0x5c3018 })
+    );
+    pm.position.set(
+      this.obj.position.x + 1.5 + Math.random()*1.5,  // 기니 오른쪽(+X) 텃밭 안 (더 깊이)
+      0.65,
+      this.obj.position.z + (Math.random()-.5)*0.6
+    );
+    scene.add(pm);
+    gd.poopMeshes.push(pm);
+  }
+
+  remove(happy){
+    gs.usedSlots.delete(this.slot);
+    this.state='done';
+    scene.remove(this.obj);
+    if(this.foodOnPlate) scene.remove(this.foodOnPlate);
+    this.bubbleEl.remove(); this.timerEl.remove();
+    gs.guineaPigs=gs.guineaPigs.filter(x=>x!==this);
+    if(!happy) {
+      // 배고픈 기니 카운트 증가
+      gs.hungry++;
+      document.getElementById('hungry').textContent = gs.hungry;
+      const hungryPill = document.getElementById('hungry-pill');
+      if (gs.hungry >= 7) hungryPill.classList.add('warn');
+      showFloat(new THREE.Vector3(this.seatX,2,this.seatZ),'😢 갔어요...','#6699ff');
+      // 10마리 도달 → 게임 오버
+      if (gs.hungry >= 10 && !gs.gameOver) {
+        triggerGameOver();
+      }
+    }
+  }
+
+  syncHTML(){
+    if(this.state==='done') return;
+    const p=this.obj.position.clone(); p.y+=2.0;
+    const n=p.project(camera);
+    const x=(n.x*.5+.5)*innerWidth, y=(-n.y*.5+.5)*innerHeight;
+    this.bubbleEl.style.left=x+'px'; this.bubbleEl.style.top=y+'px';
+    this.timerEl.style.left=x+'px';  this.timerEl.style.top=(y+14)+'px';
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  WATER PANEL
+// ═══════════════════════════════════════════════
+function updateWaterPanel(){
+  const map={tomato:['wp-t','wb-t'],strawberry:['wp-s','wb-s'],lettuce:['wp-l','wb-l']};
+  Object.entries(map).forEach(([type,[wid,bid]])=>{
+    const gd=gs.garden[type];
+    document.getElementById(wid).textContent=`💩 ${gd.poop}/${POOP_NEEDED}`;
+    const btn=document.getElementById(bid);
+    btn.disabled = gd.poop < POOP_NEEDED;
+    btn.textContent = '물주기';
+  });
+}
+
+window.waterGarden = function(type) {
+  const gd = gs.garden[type];
+  if (gd.poop < POOP_NEEDED) return;
+  // 똥 제거
+  gd.poopMeshes.forEach(m => scene.remove(m));
+  gd.poopMeshes = [];
+  gd.poop = Math.max(0, gd.poop - POOP_NEEDED);
+  // 즉시 수확 가능하게 (5개)
+  gd.ready = 5;
+  refreshPlants(type);
+  updateWaterPanel();
+
+  // 물뿌리개 등장 시퀀스 시작
+  const can = makeWateringCan();
+  // 화면 위쪽에서 등장
+  const targetVeg = new THREE.Vector3(GX, 2.6, VEG_DEFS[type].z);
+  const startPos  = new THREE.Vector3(GX + GARDEN_W/2 + 2, 8, VEG_DEFS[type].z);
+  can.position.copy(startPos);
+  scene.add(can);
+
+  activeCans.push({
+    can,
+    state: 'arriving',   // arriving → pouring → leaving → done
+    t: 0,
+    startPos: startPos.clone(),
+    targetPos: targetVeg.clone(),
+    leavePos: new THREE.Vector3(GX + GARDEN_W/2 + 2, 8, VEG_DEFS[type].z),
+    droplets: [],
+    type,
+  });
+};
+
+// ═══════════════════════════════════════════════
+//  INVENTORY UI
+// ═══════════════════════════════════════════════
+function updateInventoryUI(){
+  const div=document.getElementById('inventory');
+  div.innerHTML='';
+  const counts={};
+  gs.inventory.forEach(t=>counts[t]=(counts[t]||0)+1);
+  const types=[];
+  gs.inventory.forEach(t=>{ if(!types.includes(t)) types.push(t); });
+  types.forEach(type=>{
+    const cnt=counts[type];
+    const s=document.createElement('div');
+    s.className='inv-slot'+(gs.selectedType===type?' selected':'');
+    s.innerHTML=`${EMOJI[type]}<div class="lbl">×${cnt}</div>`;
+    s.onclick=()=>{
+      gs.selectedType=gs.selectedType===type?null:type;
+      updateInventoryUI();
+    };
+    div.appendChild(s);
+  });
+  const has = t => (counts[t]||0) > 0;
+
+  // 기본 샐러드: 토마토 + 딸기 + 상추
+  if (has('tomato') && has('strawberry') && has('lettuce')) {
+    const s = document.createElement('div');
+    s.className = 'inv-slot salad-slot';
+    s.innerHTML = `🥗<div class="lbl">조합!</div>`;
+    s.title = '🍅+🍓+🥬 → 🥗 샐러드';
+    s.onclick = () => {
+      ['tomato','strawberry','lettuce'].forEach(t => {
+        const i = gs.inventory.indexOf(t); if (i !== -1) gs.inventory.splice(i,1);
+      });
+      gs.inventory.push('salad'); gs.selectedType = null;
+      updateInventoryUI(); showToast('🥗 샐러드 완성!');
+    };
+    div.appendChild(s);
+  }
+
+  // 점수 20점 이상에서만 등장하는 고급 샐러드
+  if (gs.score >= 20) {
+    // 딸기 샐러드: 샐러드 + 딸기
+    if (has('salad') && has('strawberry')) {
+      const s = document.createElement('div');
+      s.className = 'inv-slot salad-slot';
+      s.innerHTML = `🥗🍓<div class="lbl">딸기샐러드</div>`;
+      s.title = '🥗+🍓 → 🥗🍓 딸기 샐러드';
+      s.onclick = () => {
+        ['salad','strawberry'].forEach(t => {
+          const i = gs.inventory.indexOf(t); if (i !== -1) gs.inventory.splice(i,1);
+        });
+        gs.inventory.push('strawberry_salad'); gs.selectedType = null;
+        updateInventoryUI(); showToast('🥗🍓 딸기 샐러드 완성!');
+      };
+      div.appendChild(s);
+    }
+    // 토마토 샐러드: 샐러드 + 토마토
+    if (has('salad') && has('tomato')) {
+      const s = document.createElement('div');
+      s.className = 'inv-slot salad-slot';
+      s.innerHTML = `🥗🍅<div class="lbl">토마토샐러드</div>`;
+      s.title = '🥗+🍅 → 🥗🍅 토마토 샐러드';
+      s.onclick = () => {
+        ['salad','tomato'].forEach(t => {
+          const i = gs.inventory.indexOf(t); if (i !== -1) gs.inventory.splice(i,1);
+        });
+        gs.inventory.push('tomato_salad'); gs.selectedType = null;
+        updateInventoryUI(); showToast('🥗🍅 토마토 샐러드 완성!');
+      };
+      div.appendChild(s);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  RAYCASTING
+// ═══════════════════════════════════════════════
+const ray=new THREE.Raycaster();
+const mp =new THREE.Vector2();
+const hintEl=document.getElementById('hint');
+
+canvas.addEventListener('mousemove', e => {
+  mp.x = (e.clientX/innerWidth)*2-1; mp.y = -(e.clientY/innerHeight)*2+1;
+  ray.setFromCamera(mp, camera);
+  const hits = ray.intersectObjects(harvestables, true);
+  let ok = false;
+  for (const h of hits) {
+    // hit object에서 위로 거슬러 올라가 wrapper(또는 placeholder) 찾기
+    let n = h.object, wrapper = null;
+    while (n) {
+      if (n.userData && (n.userData.isWrapper || n.userData.isPlaceholder)) {
+        wrapper = n; break;
+      }
+      n = n.parent;
+    }
+    if (!wrapper || !wrapper.visible) continue;
+    const type = wrapper.userData.vegType;
+    if (gs.garden[type].ready > 0) {
+      hintEl.style.display = 'block';
+      hintEl.style.left = e.clientX+'px';
+      hintEl.style.top  = e.clientY+'px';
+      ok = true; break;
+    }
+  }
+  if (!ok) hintEl.style.display = 'none';
+});
+
+canvas.addEventListener('click', e => {
+  mp.x = (e.clientX/innerWidth)*2-1; mp.y = -(e.clientY/innerHeight)*2+1;
+  ray.setFromCamera(mp, camera);
+
+  // ① 텃밭 열매 클릭 → 수확 (가장 가까운 식물 1개만!)
+  const hHits = ray.intersectObjects(harvestables, true);
+  // wrapper 단위로 distinct한 것 중 가장 가까운 것
+  const seenWrappers = new Set();
+  for (const h of hHits) {
+    let n = h.object, wrapper = null;
+    while (n) {
+      if (n.userData && (n.userData.isWrapper || n.userData.isPlaceholder)) {
+        wrapper = n; break;
+      }
+      n = n.parent;
+    }
+    if (!wrapper || seenWrappers.has(wrapper) || !wrapper.visible) continue;
+    seenWrappers.add(wrapper);
+    const type = wrapper.userData.vegType;
+    const gd = gs.garden[type];
+    if (gd.ready <= 0) { showToast(`아직 ${LABEL[type]}가 없어요! 🌱`); return; }
+    wrapper.visible = false;
+    gd.ready--;
+    gs.inventory.push(type);
+    updateInventoryUI(); refreshPlants(type);
+    showFloat(
+      new THREE.Vector3(wrapper.position.x, wrapper.position.y + 0.8, wrapper.position.z),
+      EMOJI[type]+' 수확!', '#228B22'
+    );
+    return;  // 한 식물만 수확하고 종료
+  }
+
+  // ② 기니 클릭 → 배달
+  const gpObjs=[];
+  gs.guineaPigs.forEach(gp=>gp.obj.traverse(c=>gpObjs.push(c)));
+  const gHits=ray.intersectObjects(gpObjs,false);
+  for(const h of gHits){
+    let gp=h.object.userData.gp;
+    if(!gp){let p=h.object.parent;while(p){if(p.userData.gp){gp=p.userData.gp;break;}p=p.parent;}}
+    if(gp&&gp.state==='sitting'){
+      if(!gs.selectedType){showToast('📦 인벤토리에서 음식을 먼저 선택!');return;}
+      const idx=gs.inventory.indexOf(gs.selectedType);
+      if(idx===-1) return;
+      if(gp.receiveFeed(gs.selectedType)){
+        gs.inventory.splice(idx,1);
+        gs.selectedType=null;
+        updateInventoryUI();
+      }
+      return;
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════
+function showFloat(pos,text,color='#333'){
+  const n=pos.clone().project(camera);
+  const x=(n.x*.5+.5)*innerWidth,y=(-n.y*.5+.5)*innerHeight;
+  const el=document.createElement('div');
+  el.className='fpop';
+  el.style.cssText=`left:${x}px;top:${y}px;color:${color}`;
+  el.textContent=text;
+  document.getElementById('ui').appendChild(el);
+  setTimeout(()=>el.remove(),1300);
+}
+function showToast(msg){
+  const el=document.createElement('div');
+  el.className='toast'; el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),2000);
+}
+
+// ═══════════════════════════════════════════════
+//  GAME OVER / RESTART
+// ═══════════════════════════════════════════════
+function triggerGameOver() {
+  gs.gameOver = true;
+  document.getElementById('go-score').textContent  = gs.score;
+  document.getElementById('go-hungry').textContent = gs.hungry;
+  document.getElementById('gameover').classList.add('show');
+  // 진행 중인 모든 기니 정리 (말풍선 등 잔여 UI 제거)
+  [...gs.guineaPigs].forEach(gp => {
+    gp.state = 'done';
+    scene.remove(gp.obj);
+    if (gp.foodOnPlate) scene.remove(gp.foodOnPlate);
+    gp.bubbleEl.remove();
+    gp.timerEl.remove();
+  });
+  gs.guineaPigs = [];
+}
+
+window.restartGame = function() {
+  // 모달 숨기기
+  document.getElementById('gameover').classList.remove('show');
+  document.getElementById('hungry-pill').classList.remove('warn');
+
+  // 점수 초기화
+  gs.score = 0;
+  gs.hungry = 0;
+  gs.gameOver = false;
+  document.getElementById('score').textContent = '0';
+  document.getElementById('hungry').textContent = '0';
+
+  // 인벤토리 비우기
+  gs.inventory = [];
+  gs.selectedType = null;
+  updateInventoryUI();
+
+  // 텃밭 초기화 (모든 채소 5개 부활, 똥 제거)
+  ['tomato','strawberry','lettuce'].forEach(type => {
+    const gd = gs.garden[type];
+    gd.poopMeshes.forEach(m => scene.remove(m));
+    gd.poopMeshes = [];
+    gd.poop = 0;
+    gd.ready = 5;
+    refreshPlants(type);
+  });
+  updateWaterPanel();
+
+  // 좌석 초기화 (남아있던 기니 모두 제거 - triggerGameOver에서 했지만 안전하게)
+  [...gs.guineaPigs].forEach(gp => {
+    scene.remove(gp.obj);
+    if (gp.foodOnPlate) scene.remove(gp.foodOnPlate);
+    gp.bubbleEl?.remove();
+    gp.timerEl?.remove();
+  });
+  gs.guineaPigs = [];
+  gs.usedSlots.clear();
+  gs.spawnTimer = SPAWN_INT - 2;
+
+  // 활성 물뿌리개 모두 정리
+  activeCans.forEach(ac => {
+    scene.remove(ac.can);
+    ac.droplets.forEach(d => scene.remove(d));
+  });
+  activeCans.length = 0;
+
+  console.log('🔄 게임 재시작!');
+};
+
+// ═══════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════
+let lastT=performance.now();
+
+(function loop(){
+  requestAnimationFrame(loop);
+  const now=performance.now();
+  const delta=Math.min((now-lastT)/1000,.1);
+  lastT=now;
+  const t=now/1000;
+
+  
+
+  // 기니 소환 (게임 오버 시엔 안 함)
+  if (!gs.gameOver) {
+    gs.spawnTimer+=delta;
+    if(gs.spawnTimer>=SPAWN_INT&&gs.guineaPigs.length<MAX_GPs){
+      gs.guineaPigs.push(new GuineaPig());
+      gs.spawnTimer=0;
+    }
+  }
+
+  // 기니 업데이트
+  gs.guineaPigs.forEach(gp=>gp.update(delta));
+
+  // ── 음식 날아가는 애니메이션 ──
+  for(let i=foodAnims.length-1;i>=0;i--){
+    const a=foodAnims[i];
+    a.t+=delta/a.dur;
+    if(a.t>=1){
+      // 착지!
+      a.mesh.position.copy(a.end);
+      a.mesh.rotation.set(0,0,0);
+      // 착지 바운스 (작게)
+      let bT=0;
+      const bv=setInterval(()=>{
+        bT+=.04;
+        a.mesh.position.y=a.end.y+Math.abs(Math.sin(bT*8))*(1-bT)*.3;
+        if(bT>=1){clearInterval(bv); a.mesh.position.y=a.end.y;}
+      },30);
+      a.onLand(a.mesh);
+      foodAnims.splice(i,1);
+      continue;
+    }
+    a.mesh.position.copy(bezier2(a.start,a.ctrl,a.end,a.t));
+    a.mesh.rotation.x+=delta*6;
+    a.mesh.rotation.z+=delta*3.5;
+  }
+
+  // ── 활성 물뿌리개 업데이트 ──
+  for (let ci = activeCans.length - 1; ci >= 0; ci--) {
+    const ac = activeCans[ci];
+    ac.t += delta;
+
+    if (ac.state === 'arriving') {
+      // 0.7초 동안 위→텃밭으로 하강 + 살짝 기울임
+      const p = Math.min(ac.t / 0.7, 1);
+      ac.can.position.lerpVectors(ac.startPos, ac.targetPos, p);
+      ac.can.rotation.z = -p * 0.3;
+      if (p >= 1) {
+        ac.state = 'pouring';
+        ac.t = 0;
+      }
+    } else if (ac.state === 'pouring') {
+      // 1.5초 동안 기울이고 물방울 분사
+      const TILT_TIME = 0.3;
+      const POUR_TIME = 1.5;
+      // 기울이기
+      const tiltP = Math.min(ac.t / TILT_TIME, 1);
+      ac.can.rotation.z = -0.3 - tiltP * 0.9;  // -0.3 → -1.2 (많이 기울임)
+
+      // 흔들기 (살짝)
+      ac.can.position.y = ac.targetPos.y + Math.sin(ac.t * 14) * 0.04;
+
+      // 물방울 생성 (기울이는 도중부터)
+      if (ac.t > TILT_TIME * 0.5 && ac.t < POUR_TIME) {
+        // 매 프레임 0~2개 생성
+        const n = Math.random() < 0.7 ? (Math.random() < 0.4 ? 2 : 1) : 0;
+        for (let k = 0; k < n; k++) {
+          // 주둥이 끝의 월드 좌표 계산
+          const tipLocal = new THREE.Vector3(0.85, 0.55, 0);
+          const tipWorld = tipLocal.clone();
+          ac.can.localToWorld(tipWorld);
+          const drop = new THREE.Mesh(
+            new THREE.SphereGeometry(.06, 6, 5),
+            new THREE.MeshLambertMaterial({ color: 0x55c8ff, transparent: true, opacity: 0.85 })
+          );
+          drop.position.copy(tipWorld);
+          // 초기 속도: 약간 +X 방향, 아래로
+          drop.userData.vel = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.6,
+            -0.5 - Math.random() * 0.4,
+            (Math.random() - 0.5) * 0.6
+          );
+          drop.userData.life = 0;
+          scene.add(drop);
+          ac.droplets.push(drop);
+        }
+      }
+
+      // 물방울 물리
+      for (let di = ac.droplets.length - 1; di >= 0; di--) {
+        const d = ac.droplets[di];
+        d.userData.life += delta;
+        // 중력
+        d.userData.vel.y -= 9.8 * delta;
+        d.position.x += d.userData.vel.x * delta;
+        d.position.y += d.userData.vel.y * delta;
+        d.position.z += d.userData.vel.z * delta;
+        // 땅에 닿거나 0.8초 지나면 제거
+        if (d.position.y < 0.5 || d.userData.life > 0.8) {
+          scene.remove(d);
+          ac.droplets.splice(di, 1);
+        }
+      }
+
+      if (ac.t >= POUR_TIME) {
+        ac.state = 'leaving';
+        ac.t = 0;
+        ac.fromPos = ac.can.position.clone();
+        ac.fromRot = ac.can.rotation.z;
+      }
+    } else if (ac.state === 'leaving') {
+      // 0.6초 동안 위로 사라짐
+      const p = Math.min(ac.t / 0.6, 1);
+      ac.can.position.lerpVectors(ac.fromPos, ac.leavePos, p);
+      ac.can.rotation.z = ac.fromRot * (1 - p);  // 기울기 복원
+      if (p >= 1) {
+        // 모두 정리
+        scene.remove(ac.can);
+        ac.droplets.forEach(d => scene.remove(d));
+        activeCans.splice(ci, 1);
+      }
+    }
+  }
+
+  // 식물 살랑살랑 (위로 솟은 형태라 z축 기울임만 살짝)
+  Object.values(gs.garden).forEach((gd, gi) => {
+    gd.fruits.forEach((f, i) => {
+      if (f.visible) {
+        // 살짝 좌우로 흔들기 (각 식물마다 위상 다르게)
+        const sway = Math.sin(t * 0.8 + i * 1.3 + gi * 2) * 0.03;
+        f.rotation.z = sway;
+      }
+    });
+  });
+
+  renderer.render(scene,camera);
+})();
+
+updateInventoryUI();
+updateWaterPanel();
+</script>
+</body>
+</html>
