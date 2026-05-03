@@ -781,18 +781,31 @@ function loadGuineaTextures(prefix) {
   const loader = new THREE.TextureLoader();
   const setupTex = tex => {
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.flipY = false;       // glTF 규약: UV 뒤집지 않음
+    tex.flipY = false;
     tex.needsUpdate = true;
     return tex;
   };
 
+  // 상대 경로를 현재 페이지 기준 절대 URL로 변환 → GitHub Pages, localhost 등 모두 작동
+  const resolveUrl = relPath => new URL(relPath, document.baseURI).href;
+
+  console.log(`🎨 텍스처 로딩 시작 (prefix="${prefix}", baseURI=${document.baseURI})`);
+
   let pendingCount = 0;
   let doneCount = 0;
-  const onOne = () => {
+  let failCount = 0;
+  const onOne = (url, ok) => {
     doneCount++;
+    if (!ok) failCount++;
     if (doneCount >= pendingCount) {
       texturesLoaded = true;
-      console.log(`🎨 텍스처 ${doneCount}개 로드 완료`);
+      console.log(`🎨 텍스처 로딩 종료: 성공 ${doneCount-failCount}/${doneCount}, 실패 ${failCount}`);
+      // 이미 스폰된 기니피그들에게 소급 적용
+      if (typeof gs !== 'undefined' && gs.guineaPigs) {
+        gs.guineaPigs.forEach(gp => {
+          if (gp.coat && gp.obj) applyCoatColor(gp.obj, gp.coat);
+        });
+      }
     }
   };
 
@@ -804,13 +817,20 @@ function loadGuineaTextures(prefix) {
       ear:  `${prefix}giniear_${color}.png`,
       eye:  `${prefix}${eyeFile}`,
     };
-    Object.entries(files).forEach(([part, url]) => {
+    Object.entries(files).forEach(([part, relPath]) => {
+      const absUrl = resolveUrl(relPath);
       pendingCount++;
       loader.load(
-        url,
-        tex => { guineaTextures[color][part] = setupTex(tex); onOne(); },
+        absUrl,
+        tex => {
+          guineaTextures[color][part] = setupTex(tex);
+          onOne(absUrl, true);
+        },
         undefined,
-        err => { console.warn(`텍스처 로드 실패: ${url}`); onOne(); }
+        err => {
+          console.warn(`❌ 텍스처 로드 실패: ${absUrl}`);
+          onOne(absUrl, false);
+        }
       );
     });
   });
