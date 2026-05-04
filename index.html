@@ -171,15 +171,51 @@ canvas{display:block}
   pointer-events:none;white-space:nowrap;
 }
 
-/* 팁 */
-#tip{
-  position:absolute;bottom:108px;left:18px;
-  background:rgba(255,255,255,.88);
-  border-radius:16px;padding:10px 15px;
-  font-size:13px;line-height:2;color:#444;
-  pointer-events:none;
-  box-shadow:0 3px 10px rgba(0,0,0,.12);
+/* 시작 화면 */
+#intro{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.55);
+  display:flex;align-items:center;justify-content:center;
+  z-index:900;
 }
+#intro.hidden{display:none}
+#intro .panel{
+  background:#fffbea;
+  border-radius:24px;
+  padding:40px 50px;
+  max-width:460px;width:90%;
+  text-align:center;
+  box-shadow:0 12px 40px rgba(0,0,0,.35);
+  border:4px solid #d4a843;
+  animation:introIn .35s cubic-bezier(.2,.9,.3,1.2);
+}
+@keyframes introIn{
+  from{opacity:0;transform:scale(.85)}
+  to{opacity:1;transform:scale(1)}
+}
+#intro .icon{font-size:80px;margin-bottom:8px;display:block}
+#intro h1{
+  color:#5a3e1b;font-size:30px;margin-bottom:16px;
+  font-weight:bold;
+}
+#intro p{
+  color:#4a3010;font-size:17px;line-height:1.7;
+  margin:18px 0 28px;
+}
+#intro button{
+  border:none;border-radius:30px;
+  padding:15px 50px;
+  font-size:20px;font-weight:bold;
+  background:linear-gradient(135deg,#7bc67a,#5aaa59);
+  color:#fff;cursor:pointer;
+  box-shadow:0 6px 16px rgba(0,0,0,.25);
+  transition:all .2s;
+}
+#intro button:hover{
+  transform:translateY(-3px) scale(1.05);
+  box-shadow:0 9px 22px rgba(0,0,0,.3);
+}
+#intro button:active{transform:translateY(0) scale(1)}
 
 /* 토스트 */
 .toast{
@@ -225,12 +261,17 @@ canvas{display:block}
   </div>
 
   <div id="inventory"></div>
+</div>
 
-  <div id="tip">
-    🌱 텃밭 채소 <b>클릭</b>으로 수확<br>
-    🍽️ 인벤토리 선택 → <b>기니 클릭</b><br>
-    💩 기니 똥 3개 → 🚿 물주기<br>
-    🌱 물 주면 채소가 즉시 자라요!
+<!-- 시작 화면 -->
+<div id="intro">
+  <div class="panel">
+    <span class="icon">🐹</span>
+    <h1>기니에게 밥 주기</h1>
+    <p>채소를 수확해 기니에게 주세요.<br>
+       배부른 기니의 똥을 모아 물을 주면<br>
+       채소가 다시 자라요.</p>
+    <button onclick="document.getElementById('intro').classList.add('hidden')">시작하기</button>
   </div>
 </div>
 
