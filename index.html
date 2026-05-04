@@ -254,68 +254,73 @@ canvas{display:block}
    모바일 (가로 768px 이하) - UI 축소·재배치
 ══════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* 점수 알약 작게 */
-  #score-box{top:10px;right:10px;gap:4px}
-  .score-pill{padding:6px 14px;font-size:13px}
+  /* 점수 알약 - 매우 작게 */
+  #score-box{top:8px;right:8px;gap:3px}
+  .score-pill{padding:4px 10px;font-size:11px;border-radius:18px}
 
-  /* 물주기 패널 작게 + 점수 박스 아래로 */
+  /* 물주기 패널 - 좌측 상단 (점수와 안 겹치게) */
   #water-panel{
-    top:74px;right:10px;bottom:auto;left:auto;
-    padding:7px 10px;font-size:11px;
+    top:8px;left:8px;right:auto;bottom:auto;
+    padding:5px 8px;font-size:10px;border-radius:12px;
+    border-width:1.5px;
   }
-  #water-panel h4{font-size:12px;margin-bottom:5px}
-  .wr{margin:3px 0;gap:4px}
-  .wr .wi{font-size:15px}
-  .wr .wp{font-size:11px}
-  .wr .wb{padding:4px 7px;font-size:11px;border-radius:7px}
+  #water-panel h4{font-size:10px;margin-bottom:3px}
+  .wr{margin:2px 0;gap:3px}
+  .wr .wi{font-size:12px}
+  .wr .wp{font-size:9px}
+  .wr .wb{padding:2px 5px;font-size:9px;border-radius:5px}
 
-  /* 인벤토리 슬롯 작게 + 빈틈 좁게 */
+  /* 인벤토리 - 우측 하단 세로 정렬, 작게 */
   #inventory{
-    bottom:10px;
-    gap:6px;
-    justify-content:flex-start;
-    left:0;
-    transform:none;
-    width:100vw;
-    padding:6px 10px 4px;
+    flex-direction:column;
+    bottom:8px;right:8px;left:auto;top:auto;
+    transform:none;width:auto;max-width:none;
+    gap:4px;
+    padding:4px;
+    overflow:visible;
+    align-items:flex-end;
   }
   .inv-slot{
-    min-width:58px;height:58px;
-    font-size:22px;border-radius:14px;
-    border-width:2px;padding:0 4px;
+    min-width:44px;width:44px;height:44px;
+    font-size:16px;border-radius:10px;
+    border-width:2px;padding:0 2px;
+    box-shadow:0 2px 6px rgba(0,0,0,.18);
   }
-  .inv-slot .lbl{font-size:11px;margin-top:0}
+  .inv-slot .lbl{font-size:9px;margin-top:0;line-height:1}
   .inv-slot.selected{
-    box-shadow:0 0 0 2px #ff9900,0 3px 10px rgba(0,0,0,.25);
-    transform:translateY(-4px);
+    box-shadow:0 0 0 2px #ff9900,0 2px 8px rgba(0,0,0,.25);
+    transform:translateY(-2px);
   }
-  .inv-slot:hover{transform:none}  /* 모바일은 hover 효과 끔 */
+  .inv-slot:hover{transform:none}
 
-  /* 말풍선 작게 */
-  .bubble{padding:5px 9px;font-size:14px;border-radius:12px}
-  .bubble::after{border-width:7px;bottom:-7px}
+  /* 말풍선 - 작게 */
+  .bubble{padding:4px 7px;font-size:12px;border-radius:10px}
+  .bubble::after{border-width:6px;bottom:-6px}
 
   /* 게임오버 모달 */
-  #gameover h1{font-size:34px}
-  #gameover p{font-size:16px}
-  #gameover .stats{font-size:14px;padding:14px 22px}
-  #restart-btn{font-size:18px;padding:12px 36px}
+  #gameover h1{font-size:30px}
+  #gameover p{font-size:14px}
+  #gameover .stats{font-size:13px;padding:12px 20px}
+  #restart-btn{font-size:16px;padding:10px 30px}
 
   /* 시작 화면 */
-  #intro .panel{padding:28px 24px}
-  #intro .icon{font-size:60px}
-  #intro h1{font-size:24px}
-  #intro p{font-size:15px}
-  #intro button{font-size:17px;padding:13px 38px}
+  #intro .panel{padding:24px 22px}
+  #intro .icon{font-size:54px}
+  #intro h1{font-size:22px}
+  #intro p{font-size:14px}
+  #intro button{font-size:16px;padding:11px 34px}
 }
 
 /* 매우 좁은 화면 (480px 이하) */
 @media (max-width: 480px) {
-  .score-pill{padding:5px 11px;font-size:12px}
-  #water-panel{font-size:10px;padding:6px 8px}
-  .wr .wb{padding:3px 6px;font-size:10px}
-  .inv-slot{min-width:52px;height:52px;font-size:20px}
-  .inv-slot .lbl{font-size:10px}
+  .score-pill{padding:3px 8px;font-size:10px}
+  #water-panel{font-size:9px;padding:4px 6px}
+  #water-panel h4{font-size:9px}
+  .wr .wi{font-size:11px}
+  .wr .wp{font-size:8px}
+  .wr .wb{padding:2px 4px;font-size:8px}
+  .inv-slot{min-width:40px;width:40px;height:40px;font-size:14px}
+  .inv-slot .lbl{font-size:8px}
 }
 </style>
 </head>
