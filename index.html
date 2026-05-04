@@ -235,6 +235,88 @@ canvas{display:block}
 }
 .spin{font-size:72px;animation:spinY 1.5s linear infinite;display:block}
 @keyframes spinY{to{transform:rotateY(360deg)}}
+
+/* ══════════════════════════════════════════════════
+   인벤토리 가로 스크롤 (slot이 많으면) - 항상 적용
+══════════════════════════════════════════════════ */
+#inventory{
+  max-width:calc(100vw - 24px);
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;       /* Firefox */
+  padding:6px 12px 4px;       /* 그림자 잘림 방지 */
+  -webkit-overflow-scrolling:touch;
+}
+#inventory::-webkit-scrollbar{display:none}
+.inv-slot{flex-shrink:0}      /* 절대 줄어들지 않음 */
+
+/* ══════════════════════════════════════════════════
+   모바일 (가로 768px 이하) - UI 축소·재배치
+══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* 점수 알약 작게 */
+  #score-box{top:10px;right:10px;gap:4px}
+  .score-pill{padding:6px 14px;font-size:13px}
+
+  /* 물주기 패널 작게 + 점수 박스 아래로 */
+  #water-panel{
+    top:74px;right:10px;bottom:auto;left:auto;
+    padding:7px 10px;font-size:11px;
+  }
+  #water-panel h4{font-size:12px;margin-bottom:5px}
+  .wr{margin:3px 0;gap:4px}
+  .wr .wi{font-size:15px}
+  .wr .wp{font-size:11px}
+  .wr .wb{padding:4px 7px;font-size:11px;border-radius:7px}
+
+  /* 인벤토리 슬롯 작게 + 빈틈 좁게 */
+  #inventory{
+    bottom:10px;
+    gap:6px;
+    justify-content:flex-start;
+    left:0;
+    transform:none;
+    width:100vw;
+    padding:6px 10px 4px;
+  }
+  .inv-slot{
+    min-width:58px;height:58px;
+    font-size:22px;border-radius:14px;
+    border-width:2px;padding:0 4px;
+  }
+  .inv-slot .lbl{font-size:11px;margin-top:0}
+  .inv-slot.selected{
+    box-shadow:0 0 0 2px #ff9900,0 3px 10px rgba(0,0,0,.25);
+    transform:translateY(-4px);
+  }
+  .inv-slot:hover{transform:none}  /* 모바일은 hover 효과 끔 */
+
+  /* 말풍선 작게 */
+  .bubble{padding:5px 9px;font-size:14px;border-radius:12px}
+  .bubble::after{border-width:7px;bottom:-7px}
+
+  /* 게임오버 모달 */
+  #gameover h1{font-size:34px}
+  #gameover p{font-size:16px}
+  #gameover .stats{font-size:14px;padding:14px 22px}
+  #restart-btn{font-size:18px;padding:12px 36px}
+
+  /* 시작 화면 */
+  #intro .panel{padding:28px 24px}
+  #intro .icon{font-size:60px}
+  #intro h1{font-size:24px}
+  #intro p{font-size:15px}
+  #intro button{font-size:17px;padding:13px 38px}
+}
+
+/* 매우 좁은 화면 (480px 이하) */
+@media (max-width: 480px) {
+  .score-pill{padding:5px 11px;font-size:12px}
+  #water-panel{font-size:10px;padding:6px 8px}
+  .wr .wb{padding:3px 6px;font-size:10px}
+  .inv-slot{min-width:52px;height:52px;font-size:20px}
+  .inv-slot .lbl{font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -368,7 +450,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setSize(innerWidth, innerHeight);
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
+  fitCameraToAspect();
   renderer.setSize(innerWidth, innerHeight);
 });
 
@@ -399,8 +481,21 @@ scene.fog = new THREE.FogExp2(0x8ad488, 0.018);
 
 // 카메라: 바 좌석(왼쪽)과 텃밭(오른쪽)이 모두 보임
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 100);
-camera.position.set(-1, 16, 15);
-camera.lookAt(5, 0, -1);
+function fitCameraToAspect() {
+  const aspect = innerWidth / innerHeight;
+  if (aspect < 1) {
+    // 세로 화면(모바일) - 더 멀리 + 위에서 내려다보게
+    camera.position.set(-1, 22, 22);
+    camera.fov = 55;
+  } else {
+    // 가로/정상 화면
+    camera.position.set(-1, 16, 15);
+    camera.fov = 52;
+  }
+  camera.lookAt(5, 0, -1);
+  camera.updateProjectionMatrix();
+}
+fitCameraToAspect();
 
 // ═══════════════════════════════════════════════
 //  LIGHTING
