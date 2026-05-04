@@ -492,9 +492,9 @@ const harvestables = [];
 //  - lettuce:    크기 4.8 × 5.0 × 5.9
 // 각 채소의 목표 높이(게임 단위) — 실제 GLB 크기와 무관하게 자동 스케일됨
 const GLB_CONFIG = {
-  tomato:     { file: 'guinea/tomato.glb',     targetHeight: 3.2, spacing: 1.5 },
-  strawberry: { file: 'guinea/strawberry.glb', targetHeight: 2.8, spacing: 1.7 },
-  lettuce:    { file: 'guinea/lettuce.glb',    targetHeight: 2.0, spacing: 1.7 },
+  tomato:     { file: 'tomato.glb',     targetHeight: 3.2, spacing: 1.5 },
+  strawberry: { file: 'strawberry.glb', targetHeight: 2.8, spacing: 1.7 },
+  lettuce:    { file: 'lettuce.glb',    targetHeight: 2.0, spacing: 1.7 },
 };
 
 // 텃밭 표면 Y좌표 (gardenBed 상단)
@@ -766,7 +766,7 @@ function launchFood(type, targetPos, onLand) {
 // ═══════════════════════════════════════════════
 //  GLB MODEL LOADING
 //  server.py 가 '과제2026/' 에서 실행되므로
-//  상대 경로 'guinea/guinea.glb' 로 접근 가능
+//  ASSET_BASE 기준으로 'guinea.glb' 직접 접근
 // ═══════════════════════════════════════════════
 let gpTemplate = null;
 
@@ -829,7 +829,7 @@ function loadGuineaTextures(_prefixHint) {
       eye:  eyeFile,
     };
     Object.entries(files).forEach(([part, filename]) => {
-      const url = asset('guinea/' + filename);
+      const url = asset(filename);
       pendingCount++;
       loader.load(
         url,
@@ -893,7 +893,7 @@ async function diagnoseAndLoadGLB() {
   console.log(`baseURI       : ${document.baseURI}`);
 
   // ASSET_BASE 기준 경로로 통일 (GitHub Pages 호환)
-  const candidates = [asset('guinea/guinea.glb')];
+  const candidates = [asset('guinea.glb')];
 
   for (const path of candidates) {
     const fullURL = new URL(path, document.baseURI).href;
@@ -973,7 +973,7 @@ async function diagnoseAndLoadGLB() {
   console.error('━━━━━━━━━━ 모든 GLB 경로 실패 ━━━━━━━━━━');
   console.warn('💡 점검 사항:');
   console.warn('  1. 서버를 어느 폴더에서 실행했는지 확인 (server.py 출력 메시지)');
-  console.warn('  2. 그 폴더에 "guinea/guinea.glb" 또는 "../guinea/guinea.glb" 가 있는지');
+  console.warn('  2. 같은 폴더에 "guinea.glb" 가 있는지');
   console.warn('  3. 파일 이름에 오타나 공백이 없는지 (정확히 "guinea.glb")');
   console.warn('  4. 위 콘솔의 HTTP 상태 코드와 매직 넘버 확인');
 }
