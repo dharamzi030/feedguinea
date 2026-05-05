@@ -1375,21 +1375,37 @@ class GuineaPig {
     // 자신이 정한 타겟 채소 구역에 똥을 쌈
     const type = this.poopTargetType || ['tomato','strawberry','lettuce'][Math.floor(Math.random()*3)];
     const gd = gs.garden[type];
-    gd.poop++;
+
+    // 주문 메뉴에 따라 똥 개수 결정
+    //  - salad         (기본 샐러드)        → 2개
+    //  - strawberry_salad / tomato_salad    → 3개
+    //  - 그 외 단일 채소                    → 1개
+    let poopCount = 1;
+    if (this.order === 'salad') poopCount = 2;
+    else if (this.order === 'strawberry_salad' || this.order === 'tomato_salad') poopCount = 3;
+
+    showFloat(
+      this.obj.position.clone().add(new THREE.Vector3(0,1.2,0)),
+      '💩'.repeat(poopCount),
+      '#8B4513'
+    );
+
+    for (let k = 0; k < poopCount; k++) {
+      gd.poop++;
+      // 똥 mesh - 기니 엉덩이 뒤쪽(+X = 텃밭 안쪽)에 떨어짐
+      const pm = new THREE.Mesh(
+        new THREE.SphereGeometry(.15, 8, 6),
+        new THREE.MeshLambertMaterial({ color: 0x5c3018 })
+      );
+      pm.position.set(
+        this.obj.position.x + 1.5 + Math.random()*1.5,  // 기니 오른쪽(+X) 텃밭 안
+        0.65,
+        this.obj.position.z + (Math.random()-.5)*0.6
+      );
+      scene.add(pm);
+      gd.poopMeshes.push(pm);
+    }
     updateWaterPanel();
-    showFloat(this.obj.position.clone().add(new THREE.Vector3(0,1.2,0)),'💩','#8B4513');
-    // 똥 mesh - 기니 엉덩이 뒤쪽(+X = 텃밭 안쪽)에 떨어짐
-    const pm = new THREE.Mesh(
-      new THREE.SphereGeometry(.15, 8, 6),
-      new THREE.MeshLambertMaterial({ color: 0x5c3018 })
-    );
-    pm.position.set(
-      this.obj.position.x + 1.5 + Math.random()*1.5,  // 기니 오른쪽(+X) 텃밭 안 (더 깊이)
-      0.65,
-      this.obj.position.z + (Math.random()-.5)*0.6
-    );
-    scene.add(pm);
-    gd.poopMeshes.push(pm);
   }
 
   remove(happy){
