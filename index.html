@@ -358,7 +358,7 @@ canvas{display:block}
     <p>채소를 수확해 기니에게 주세요.<br>
        배부른 기니의 똥을 모아 물을 주면<br>
        채소가 다시 자라요.</p>
-    <button onclick="document.getElementById('intro').classList.add('hidden')">시작하기</button>
+    <button onclick="document.getElementById('intro').classList.add('hidden'); startBGM();">시작하기</button>
   </div>
 </div>
 
@@ -479,6 +479,65 @@ const ASSET_BASE = (() => {
 function asset(relPath) {
   return ASSET_BASE + relPath;
 }
+
+// ═══════════════════════════════════════════════
+//  SOUND SYSTEM
+// ═══════════════════════════════════════════════
+const SOUND = {
+  bgm:     null,
+  button:  null,
+  throw:   null,
+  guinea1: null,
+  guinea2: null,
+};
+
+// 각 효과음은 동시 다발적 재생을 위해 풀(pool) 사용
+function makeAudio(file, opts = {}) {
+  const a = new Audio(asset(file));
+  a.preload = 'auto';
+  if (opts.loop) a.loop = true;
+  if (opts.volume != null) a.volume = opts.volume;
+  return a;
+}
+
+SOUND.bgm     = makeAudio('bgm.mp3', { loop: true, volume: 0.4 });
+SOUND.button  = makeAudio('button.mp3', { volume: 0.6 });
+SOUND.throw   = makeAudio('throw.mp3', { volume: 0.7 });
+SOUND.guinea1 = makeAudio('guinea1.mp3', { volume: 0.6 });
+SOUND.guinea2 = makeAudio('guinea2.mp3', { volume: 0.6 });
+
+// 효과음 재생 (현재 재생 중이면 처음부터 다시 시작 → 빠른 연속 호출 OK)
+function playSfx(audio) {
+  if (!audio) return;
+  try {
+    audio.currentTime = 0;
+    audio.play().catch(() => { /* 자동재생 정책 무시 */ });
+  } catch (e) {}
+}
+
+// 기니 울음 — 두 종류 랜덤
+function playGuineaSqueak() {
+  const a = Math.random() < 0.5 ? SOUND.guinea1 : SOUND.guinea2;
+  playSfx(a);
+}
+
+// BGM 시작 (사용자 첫 인터랙션 후에 호출돼야 함)
+let bgmStarted = false;
+window.startBGM = function() {
+  if (bgmStarted) return;
+  bgmStarted = true;
+  SOUND.bgm.play().catch(err => {
+    console.warn('BGM 자동재생 차단:', err.message);
+    bgmStarted = false;
+  });
+};
+
+// 모든 버튼/UI 클릭에 자동으로 button.mp3 재생
+// — 캡처 단계로 잡아서 onclick 핸들러보다 먼저 실행
+document.addEventListener('click', e => {
+  const t = e.target.closest('button, .inv-slot');
+  if (t) playSfx(SOUND.button);
+}, true);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8ad488);
@@ -881,6 +940,9 @@ function bezier2(p0, p1, p2, t) {
 
 // 음식 날리기
 function launchFood(type, targetPos, onLand) {
+  // 던지는 효과음
+  playSfx(SOUND.throw);
+
   const mesh = makeFoodMesh(type);
   // 시작: 화면 아래쪽(인벤토리 위치)을 3D로 변환
   // NDC (0, -0.75, 0.5) → 언프로젝트
@@ -1261,6 +1323,7 @@ class GuineaPig {
           this.setState('sitting');
           this.bubbleEl.style.display='block';
           this.timerEl.style.display='block';
+          playGuineaSqueak();  // 도착해서 주문하는 울음소리
         }
         break;
       }
@@ -1295,21 +1358,22 @@ class GuineaPig {
           this.setState('happy');
           gs.score++; document.getElementById('score').textContent=gs.score;
           showFloat(this.obj.position.clone().add(new THREE.Vector3(0,1.7,0)),'❤️','#ff3366');
+          playGuineaSqueak();  // 만족한 울음소리
         }
         break;
       }
       case 'happy': {
         // 자기가 먹은 음식의 채소 구역으로 이동
-        // 샐러드면 랜덤 구역
+        // 단일 채소 → 같은 종류 구역
+        // 샐러드 / 딸기샐러드 / 토마토샐러드 → 랜덤 구역 (텃밭 채소 3종 중)
         if (!this.poopTargetType) {
-          if (this.order === 'salad') {
-            const types = ['tomato','strawberry','lettuce'];
-            this.poopTargetType = types[Math.floor(Math.random()*3)];
-          } else {
+          const baseTypes = ['tomato','strawberry','lettuce'];
+          if (baseTypes.includes(this.order)) {
             this.poopTargetType = this.order;
+          } else {
+            // 모든 샐러드 종류 → 랜덤 구역으로
+            this.poopTargetType = baseTypes[Math.floor(Math.random()*3)];
           }
-          // 텃밭 가장자리 (텃밭 좌측 변 = X 7.25 - 약간 여유)
-          // 채소 구역의 z 위치로 이동 (텃밭 안으로 들어가지 않음)
           const def = VEG_DEFS[this.poopTargetType];
           this.poopTargetX = GX - GARDEN_W/2 - 0.8;  // 텃밭 왼쪽 가장자리 바로 옆
           this.poopTargetZ = def.z;
@@ -1372,10 +1436,6 @@ class GuineaPig {
   }
 
   doPoop(){
-    // 자신이 정한 타겟 채소 구역에 똥을 쌈
-    const type = this.poopTargetType || ['tomato','strawberry','lettuce'][Math.floor(Math.random()*3)];
-    const gd = gs.garden[type];
-
     // 주문 메뉴에 따라 똥 개수 결정
     //  - salad         (기본 샐러드)        → 2개
     //  - strawberry_salad / tomato_salad    → 3개
@@ -1384,27 +1444,46 @@ class GuineaPig {
     if (this.order === 'salad') poopCount = 2;
     else if (this.order === 'strawberry_salad' || this.order === 'tomato_salad') poopCount = 3;
 
+    // 똥 분배 대상 구역 결정
+    // 1개 → 자기가 정한 구역에만
+    // 2개 → 랜덤한 서로 다른 두 구역에
+    // 3개 → 세 구역 모두에 1개씩
+    const baseTypes = ['tomato','strawberry','lettuce'];
+    let targetTypes;
+    if (poopCount === 1) {
+      targetTypes = [this.poopTargetType || baseTypes[Math.floor(Math.random()*3)]];
+    } else if (poopCount === 3) {
+      targetTypes = [...baseTypes];
+    } else {
+      // 2개 — 랜덤 두 구역
+      const shuffled = [...baseTypes].sort(() => Math.random() - 0.5);
+      targetTypes = shuffled.slice(0, 2);
+    }
+
     showFloat(
       this.obj.position.clone().add(new THREE.Vector3(0,1.2,0)),
       '💩'.repeat(poopCount),
       '#8B4513'
     );
 
-    for (let k = 0; k < poopCount; k++) {
+    targetTypes.forEach(type => {
+      const gd = gs.garden[type];
       gd.poop++;
-      // 똥 mesh - 기니 엉덩이 뒤쪽(+X = 텃밭 안쪽)에 떨어짐
+      // 똥 mesh — 해당 구역의 텃밭 안에 떨어짐
+      const def = VEG_DEFS[type];
       const pm = new THREE.Mesh(
         new THREE.SphereGeometry(.15, 8, 6),
         new THREE.MeshLambertMaterial({ color: 0x5c3018 })
       );
       pm.position.set(
-        this.obj.position.x + 1.5 + Math.random()*1.5,  // 기니 오른쪽(+X) 텃밭 안
+        GX - GARDEN_W/2 + 0.8 + Math.random() * (GARDEN_W - 1.6),  // 텃밭 안 X 랜덤
         0.65,
-        this.obj.position.z + (Math.random()-.5)*0.6
+        def.z + (Math.random() - 0.5) * 1.2                        // 그 구역 z + 약간 산포
       );
       scene.add(pm);
       gd.poopMeshes.push(pm);
-    }
+    });
+
     updateWaterPanel();
   }
 
@@ -1613,6 +1692,7 @@ canvas.addEventListener('click', e => {
     const type = wrapper.userData.vegType;
     const gd = gs.garden[type];
     if (gd.ready <= 0) { showToast(`아직 ${LABEL[type]}가 없어요! 🌱`); return; }
+    playSfx(SOUND.button);  // 수확 효과음
     wrapper.visible = false;
     gd.ready--;
     gs.inventory.push(type);
@@ -1688,6 +1768,9 @@ window.restartGame = function() {
   // 모달 숨기기
   document.getElementById('gameover').classList.remove('show');
   document.getElementById('hungry-pill').classList.remove('warn');
+
+  // BGM이 멈췄다면 다시 재생
+  if (SOUND.bgm.paused) SOUND.bgm.play().catch(()=>{});
 
   // 점수 초기화
   gs.score = 0;
